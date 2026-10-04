@@ -1,0 +1,277 @@
+#!/bin/sh
+# DesignerX launcher — crafted by Daniel Rodrigues.
+#
+# Runs the DesignerX core engine (an Apache-2.0 binary originating from
+# "Impeccable" by Paul Bakaus; see NOTICE.md). Resolution order:
+#   1. $DESIGNERX_BIN
+#   2. <this dir>/bin/<os>-<arch>/designerx-engine
+#   3. $DESIGNERX_HOME/bin/designerx-engine   (default ~/.designerx)
+#   4. $DESIGNERX_HOME/bin/<version>/designerx-engine (version-pinned cache)
+#   5. `designerx-engine` on PATH
+#   6. checksum-verified download into the version-pinned cache (fails closed)
+# Candidates 3 and 5 must answer the engine-probe handshake first.
+set -eu
+
+probe_ok() {
+  case "$(DESIGNERX_LAUNCHER_PROBE=1 "$1" engine-probe 2>/dev/null || true)" in
+    impeccable-engine*) return 0 ;;
+  esac
+  return 1
+}
+probing=${DESIGNERX_LAUNCHER_PROBE:-}
+
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+DESIGNERX_VERSION="1.0.0"
+
+# ---- Brand layer -----------------------------------------------------------
+# The compiled engine prints text that still names the upstream project. For
+# human/LLM-facing verbs we pass its output through brand.sed. Set
+# DESIGNERX_RAW=1 to see the engine's unmodified output.
+branded() {
+  eng=$1; shift
+  out=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/designerx.$$")
+  rc=0
+  "$eng" "$@" >"$out" 2>"$out.err" || rc=$?
+  sed -E -f "$dir/brand.sed" "$out"
+  sed -E -f "$dir/brand.sed" "$out.err" >&2
+  rm -f "$out" "$out.err"
+  exit "$rc"
+}
+run_engine() {
+  eng=$1; shift
+  if [ "${DESIGNERX_RAW:-0}" != "1" ] && [ -f "$dir/brand.sed" ]; then
+    case "${1:-}" in
+      context|hooks|doctor|detect|ignores|hook|hook-*) branded "$eng" "$@" ;;
+    esac
+  fi
+  exec "$eng" "$@"
+}
+
+# ---- Native verbs (no engine needed) --------------------------------------
+# pin <pin|unpin> <command>: standalone shortcut skills, e.g. /polish.
+designerx_pin() {
+  action=${1:-}; cmd=${2:-}
+  case "$action" in pin|unpin) ;; *) echo "usage: designerx pin <pin|unpin> <command>" >&2; return 2 ;; esac
+  case "$cmd" in ''|*[!a-z0-9-]*) echo "designerx: invalid command name: $cmd" >&2; return 2 ;; esac
+  case "$cmd" in designerx|impeccable) echo "designerx: refusing to pin the main skill" >&2; return 2 ;; esac
+  root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  n=0
+  for h in .claude .cursor .agents .agent .gemini .github .kiro .opencode .pi .qoder .rovodev .trae .trae-cn .veto .vibe .grok .hermes .dsh; do
+    base="$root/$h/skills"
+    [ -d "$base/designerx" ] || continue
+    if [ "$action" = pin ]; then
+      tpl="$base/designerx/scripts/pinned/$cmd.md"
+      if [ ! -f "$tpl" ]; then echo "designerx: unknown command '$cmd' (see: designerx help)" >&2; return 1; fi
+      mkdir -p "$base/$cmd"
+      cp "$tpl" "$base/$cmd/SKILL.md"
+      echo "  + $base/$cmd"
+    else
+      if [ -f "$base/$cmd/SKILL.md" ] && grep -q "designerx-pinned-skill" "$base/$cmd/SKILL.md" 2>/dev/null; then
+        rm -rf "$base/$cmd"; echo "  - $base/$cmd"
+      else
+        continue
+      fi
+    fi
+    n=$((n+1))
+  done
+  if [ "$n" = 0 ]; then echo "No harness directories with designerx installed found (or nothing to unpin)."; return 0; fi
+  [ "$action" = pin ] && echo "Pinned '$cmd' as a standalone shortcut in $n location(s)." || echo "Unpinned '$cmd' from $n location(s)."
+}
+
+# ---- Engine contract: the compiled core reads these variable names. -------
+: "${IMPECCABLE_SKILL_DIR:=$(CDPATH= cd -- "$dir/.." && pwd)}"
+: "${IMPECCABLE_SELF:=$0}"
+export IMPECCABLE_SKILL_DIR IMPECCABLE_SELF
+
+# ---- Privacy + fork-safety defaults (opt back in explicitly) --------------
+# The upstream engine can phone home (telemetry, update and staleness checks).
+# DesignerX is a standalone fork: an upstream "update" would overwrite it with
+# the original project, so all of that is OFF unless you set DESIGNERX_ONLINE=1.
+if [ "${DESIGNERX_ONLINE:-0}" != "1" ]; then
+  IMPECCABLE_NO_TELEMETRY=1
+  IMPECCABLE_NO_UPDATE_CHECK=1
+  IMPECCABLE_NO_STALENESS_CHECK=1
+  DO_NOT_TRACK=1
+  export IMPECCABLE_NO_TELEMETRY IMPECCABLE_NO_UPDATE_CHECK IMPECCABLE_NO_STALENESS_CHECK DO_NOT_TRACK
+fi
+# The only remaining engine network call is the concept-seed "roll" (a single
+# GET carrying scope, mode, an 8-hex seed and a counter; no project data).
+# DESIGNERX_OFFLINE=1 blocks it (the engine degrades to a local roll);
+# DESIGNERX_API_URL points it at your own service.
+if [ "${DESIGNERX_OFFLINE:-0}" = "1" ]; then
+  IMPECCABLE_API_URL=http://127.0.0.1:9
+  export IMPECCABLE_API_URL
+fi
+if [ -n "${DESIGNERX_API_URL:-}" ]; then
+  IMPECCABLE_API_URL=$DESIGNERX_API_URL
+  export IMPECCABLE_API_URL
+fi
+if [ -n "${DESIGNERX_DOWNLOAD_BASE:-}" ]; then
+  IMPECCABLE_DOWNLOAD_BASE=$DESIGNERX_DOWNLOAD_BASE
+  export IMPECCABLE_DOWNLOAD_BASE
+fi
+
+case "${1:-}" in
+  help|--help|-h)
+    if [ -f "$dir/help.txt" ]; then cat "$dir/help.txt"; exit 0; fi ;;
+  version|--version|-v)
+    echo "DesignerX $DESIGNERX_VERSION - crafted by Daniel Rodrigues"
+    [ -f "$dir/VERSION" ] && echo "core engine $(tr -d '[:space:]' < "$dir/VERSION") (Apache-2.0, derived from Impeccable by Paul Bakaus)"
+    exit 0 ;;
+  pin) shift; designerx_pin "$@"; exit $? ;;
+esac
+
+if [ -n "${DESIGNERX_BIN:-}" ] && [ -x "${DESIGNERX_BIN}" ]; then
+  run_engine "${DESIGNERX_BIN}" "$@"
+fi
+
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  MINGW*|MSYS*|CYGWIN*|Windows_NT) os=windows ;;
+  *) os=unknown ;;
+esac
+case "$(uname -m 2>/dev/null || echo unknown)" in
+  arm64|aarch64) arch=arm64 ;;
+  x86_64|amd64) arch=x64 ;;
+  *) arch=unknown ;;
+esac
+
+exe=""
+[ "$os" = windows ] && exe=".exe"
+
+bin="$dir/bin/$os-$arch/designerx-engine$exe"
+if [ -x "$bin" ]; then
+  run_engine "$bin" "$@"
+fi
+if [ -f "$bin" ]; then
+  chmod +x "$bin" 2>/dev/null && run_engine "$bin" "$@"
+fi
+
+cache_root="${DESIGNERX_HOME:-${HOME:-/nonexistent}/.designerx}"
+home_bin="$cache_root/bin/designerx-engine$exe"
+if [ -z "$probing" ] && [ -x "$home_bin" ] && probe_ok "$home_bin"; then
+  run_engine "$home_bin" "$@"
+fi
+
+version=""
+[ -f "$dir/VERSION" ] && version=$(tr -d '[:space:]' < "$dir/VERSION")
+cached="$cache_root/bin/$version/designerx-engine$exe"
+if [ -n "$version" ] && [ -x "$cached" ]; then
+  run_engine "$cached" "$@"
+fi
+if [ -z "$probing" ] && command -v designerx-engine >/dev/null 2>&1 && probe_ok designerx-engine; then
+  run_engine designerx-engine "$@"
+fi
+
+setup_help() {
+  echo "Engine $version setup needs network access and write permission to $cache_root/bin/$version." >&2
+  echo "Run this launcher ($0) with engine-probe in a terminal that has those permissions, then retry." >&2
+  echo "Alternatively set DESIGNERX_HOME to a writable cache, or DESIGNERX_BIN to a preinstalled engine binary." >&2
+}
+fetch_url() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 2 -o "$tmp" "$1" 2>/dev/null
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$tmp" "$1" 2>/dev/null
+  else
+    return 1
+  fi
+}
+check_download() {
+  download_file=${1:-$tmp}
+  if [ ! -f "$download_file" ]; then
+    rm -f "$tmp.sha256"
+    echo "designerx: download completed but the file was removed before execution: $url; check your antivirus quarantine. Refusing to continue; do not disable protection." >&2
+    exit 127
+  fi
+  if [ ! -s "$download_file" ]; then
+    rm -f "$download_file" "$tmp.sha256"
+    echo "designerx: downloaded file is empty: $url; refusing the unverified download" >&2
+    exit 127
+  fi
+}
+
+if [ -n "$probing" ]; then
+  exit 127
+fi
+if [ -n "$version" ] && [ "$os" != unknown ] && [ "$arch" != unknown ]; then
+  # The engine binary is published by the upstream project's release channel
+  # (asset names are upstream's). Override with DESIGNERX_DOWNLOAD_BASE to
+  # self-host your own mirror of the same assets + .sha256 sidecars.
+  base="${DESIGNERX_DOWNLOAD_BASE:-https://github.com/pbakaus/impeccable/releases/download}"
+  asset="impeccable-$os-$arch"
+  [ "$os" = windows ] && asset="$asset.exe"
+  url="$base/engine-v$version/$asset"
+  tmp="$cache_root/bin/$version/.designerx.part.$$"
+  if ! mkdir -p "$cache_root/bin/$version" 2>/dev/null; then
+    echo "designerx: engine $version is not installed; cannot create cache directory: $cache_root/bin/$version" >&2
+    setup_help
+    exit 127
+  fi
+  if ! (umask 077; : > "$tmp") 2>/dev/null; then
+    echo "designerx: engine $version is not installed; cannot write to cache directory: $cache_root/bin/$version" >&2
+    setup_help
+    exit 127
+  fi
+  fetched=0
+  if fetch_url "$url"; then
+    fetched=1
+  elif [ "$os" = windows ] && [ "$arch" = arm64 ]; then
+    url="$base/engine-v$version/impeccable-windows-x64.exe"
+    fetch_url "$url" && fetched=1
+  fi
+  if [ "$fetched" = 1 ]; then
+    check_download
+    # Fail closed: run a fresh download only after verifying its .sha256 sidecar.
+    sidecar_ok=0
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsSL --retry 2 -o "$tmp.sha256" "$url.sha256" 2>/dev/null && sidecar_ok=1
+    elif command -v wget >/dev/null 2>&1; then
+      wget -q -O "$tmp.sha256" "$url.sha256" 2>/dev/null && sidecar_ok=1
+    fi
+    check_download
+    expected=""
+    [ "$sidecar_ok" = 1 ] && expected=$(cut -d' ' -f1 < "$tmp.sha256")
+    actual=""
+    if command -v shasum >/dev/null 2>&1; then
+      if digest=$(shasum -a 256 "$tmp" 2>/dev/null); then actual=${digest%% *}; fi
+    elif command -v sha256sum >/dev/null 2>&1; then
+      if digest=$(sha256sum "$tmp" 2>/dev/null); then actual=${digest%% *}; fi
+    fi
+    check_download
+    rm -f "$tmp.sha256"
+    if [ -z "$expected" ] || [ -z "$actual" ]; then
+      rm -f "$tmp"
+      echo "designerx: cannot verify $url against $url.sha256 (sidecar unavailable or hashing failed); refusing the unverified download" >&2
+      exit 127
+    fi
+    if [ "$actual" != "$expected" ]; then
+      rm -f "$tmp"
+      echo "designerx: checksum mismatch downloading $url" >&2
+      exit 127
+    fi
+    check_download
+    if ! chmod +x "$tmp" 2>/dev/null; then
+      rm -f "$tmp"
+      echo "designerx: could not make the verified download executable: $url" >&2
+      exit 127
+    fi
+    if ! mv -f "$tmp" "$cached" 2>/dev/null; then
+      rm -f "$tmp"
+      echo "designerx: could not cache the verified download: $url" >&2
+      exit 127
+    fi
+    check_download "$cached"
+    run_engine "$cached" "$@"
+  fi
+  rm -f "$tmp" 2>/dev/null
+  echo "designerx: could not download engine $version from $url; check network access, the release URL, and curl or wget availability." >&2
+  setup_help
+  exit 127
+fi
+
+echo "designerx: no engine binary for $os-$arch found (looked in $bin, $cached, PATH)." >&2
+echo "Download impeccable-$os-$arch from the engine release channel (tag engine-v$version) into $cache_root/bin/$version/designerx-engine$exe (then chmod +x), or set DESIGNERX_BIN." >&2
+exit 127

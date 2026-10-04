@@ -1,0 +1,40 @@
+
+  DesignerX  -  design skills for any AI coding agent
+  crafted by Daniel Rodrigues
+
+USAGE
+  /designerx <command> [target]        inside your AI agent (Claude Code, Cursor, Gemini, ...)
+  $designerx <command> [target]        inside Codex
+  designerx <verb> [options]           from a terminal (this launcher)
+
+DESIGN COMMANDS
+  Build      craft  shape  init  document  extract
+  Evaluate   critique  audit
+  Refine     polish  bolder  quieter  distill  harden  onboard
+  Enhance    animate  colorize  typeset  layout  delight  overdrive  signature*
+  Fix        clarify  adapt  optimize  localize*
+  Iterate    live  generate
+  Ship       handoff*
+             (* DesignerX originals)
+
+  Run /designerx with no argument for a context-aware menu.
+
+TERMINAL VERBS
+  detect [file|dir|url ...]   scan UI code for anti-patterns and quality issues (CI friendly)
+  context                     load PRODUCT.md / DESIGN.md context for the current project
+  hooks <on|off|status|ignore-rule|ignore-file|ignore-value|reset>
+                              manage the automatic design detector hook
+  doctor                      report and repair drift in this project's DesignerX files
+  ignores                     manage detector ignore rules
+  pin <pin|unpin> <command>   create or remove a standalone shortcut, e.g. /polish
+  help | version
+
+ENVIRONMENT
+  DESIGNERX_HOME=<dir>        engine cache (default ~/.designerx)
+  DESIGNERX_BIN=<path>        use a preinstalled engine binary
+  DESIGNERX_ONLINE=1          re-enable engine telemetry/update/staleness checks (off by default)
+  DESIGNERX_RAW=1             print the engine's unmodified output
+  DESIGNERX_OFFLINE=1         block the one hosted call (concept-seed roll); engine falls back locally
+  DESIGNERX_API_URL=<url>     point that call at your own service
+
+DesignerX is Apache-2.0 and derived from Impeccable by Paul Bakaus. See NOTICE.md.

@@ -1,0 +1,17 @@
+{
+  "name": "designerx",
+  "version": "1.0.0",
+  "description": "DesignerX: design skills, commands, and anti-pattern detection for any AI coding agent. Crafted by Daniel Rodrigues.",
+  "author": "Daniel Rodrigues",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "bin": { "designerx": "bin/designerx.mjs" },
+  "files": ["bin/", ".agent/", ".agents/", ".claude/", ".codex/", ".cursor/", ".dsh/", ".gemini/", ".github/skills/", ".github/agents/", ".github/hooks/", ".grok/", ".hermes/", ".kiro/", ".opencode/", ".pi/", ".qoder/", ".rovodev/", ".trae/", ".trae-cn/", ".veto/", ".vibe/", "skill/", "LICENSE", "NOTICE.md", "README.md"],
+  "keywords": ["design", "ai-agents", "claude-code", "cursor", "gemini", "codex", "skills", "ux", "frontend", "accessibility", "anti-patterns", "lint"],
+  "scripts": {
+    "apply": "node scripts/apply-extensions.mjs",
+    "verify": "node scripts/verify.mjs",
+    "manual": "python3 docs/build_manual.py"
+  }
+}
