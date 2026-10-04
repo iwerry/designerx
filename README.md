@@ -6,6 +6,8 @@
 
 ---
 
+Download the manual: https://github.com/iwerry/designerx/blob/9ae6fc0b9abf895cef5654906d9cbe9c4700d0df/DesignerX-Manual.pdf
+
 Ask any AI to "make it look good" and you get the same purple gradient, the same rounded card with a left border, the same Inter. Fast, and forgettable.
 
 **DesignerX is a skill pack that teaches your coding agent to design on purpose.** It loads real product context, applies a library of design references (typography, color, spacing, motion, accessibility), runs a linter over what the agent just wrote, and gives you a vocabulary of commands to steer the result: `/designerx critique`, `/designerx polish`, `/designerx signature`.
