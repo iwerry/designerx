@@ -101,6 +101,17 @@ tools/rebrand.py                          the auditable rename pass from the ups
 
 Add your own command: put `mycommand.md` in `extensions/reference/`, register it in `scripts/apply-extensions.mjs`, run `npm run apply`, then `npm run verify`.
 
+## DesignerX Native — Daniel Rodrigues original engine
+
+A new independent source-code track now lives in [native/](native/README.md), separate from the legacy upstream engine. Its first module, **Native Inspect**, audits real HTML evidence for semantics, accessibility, responsive navigation and basic document quality with **no external dependencies**.
+
+```bash
+node native/inspect.mjs path/to/index.html --json
+node --test native/inspect.test.mjs
+```
+
+This is **an original module**, not a claim that every existing component has been rewritten. The current package still includes adapted Impeccable materials and engine; [NOTICE.md](NOTICE.md) remains authoritative for attribution. Migration details: [Native roadmap](native/README.md).
+
 ## Network and privacy, plainly
 
 - The core engine is a compiled binary from the upstream project. On first run the launcher downloads it from the upstream release channel and **verifies its SHA-256**; unverified downloads are refused. Self-host a mirror with `DESIGNERX_DOWNLOAD_BASE`.
