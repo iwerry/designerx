@@ -7,7 +7,7 @@ export function inspectLayout(source){
  const findings=[];const add=(id,severity,message,action)=>findings.push({id,severity,message,action});
  const css=(source.match(/<style[^>]*>([\s\S]*?)<\/style>/gi)||[]).join('\n');
  const rules=[...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(m=>({selector:m[1].trim(),declarations:m[2]}));
- const hero=rules.filter(x=>/\b(header|#top|h1|\.sub|\.hint|\.cta)\b/.test(x.selector));
+ const hero=rules.filter(x=>/(?:header|#top|h1|\.sub|\.hint|\.cta)/.test(x.selector));
  const abs=hero.filter(x=>/position\s*:\s*absolute/.test(x.declarations));
  if(abs.some(x=>/\.hint/.test(x.selector))&&/Move your cursor over the grid/i.test(source))
   add('DXL101','medium','Legacy cursor hint overlaps hero CTA in compact viewports','Remove hint when WebGL interaction is absent.');
